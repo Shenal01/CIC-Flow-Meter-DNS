@@ -1,0 +1,2 @@
+Src IP,Dst IP,Src Port,Dst Port,Protocol,Flow Duration,Tot Fwd Pkts,Tot Bwd Pkts,Flow Len Mean,Flow Len Std,Flow Len Max,Flow IAT Mean,Flow IAT Std,Flow IAT Max,DNS QR,DNS OpCode,DNS RCode,DNS QD Count,DNS AN Count,DNS NS Count,DNS AR Count,DNS Query Len Mean,DNS Query Type,DNS Ans Count,DNS Ans RR Types,DNS Ans TTL Mean,DNS Ans TTL Max,DNS Ans TTL Min,DNS Unique Domains,DNS RR Entropy
+1.2.3.4,8.8.8.8,12345,53,UDP,0,1,0,71.0,0.0,71.0,0.0,0.0,0.0,0,0,0,1,0,0,0,11.0,1,0,0,0.0,0,0,1,0.0
