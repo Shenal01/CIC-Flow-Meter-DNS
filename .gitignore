@@ -1,0 +1,14 @@
+# Maven
+target/
+*.jar
+dependency-reduced-pom.xml
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Project Specific Output
+*.pcap
+*.csv
+feature_extraction_log.txt
