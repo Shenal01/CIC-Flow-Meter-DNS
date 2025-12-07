@@ -8,8 +8,9 @@ Unlike standard flow exporters that only look at "headers" (Layer 3/4), this too
 ---
 
 ## 2. Comparison: Enhanced vs. Legacy CICFlowMeter
-> [!NOTE]
-> For a detailed line-by-line comparison, see our [Comprehensive Differences Guide](DIFFERENCES.md).
+
+ For a detailed line-by-line comparison, see our [Comprehensive Differences Guide](DIFFERENCES.md).
+ 
 | Feature | Legacy CICFlowMeter | **Enhanced Version (This Tool)** |
 | :--- | :--- | :--- |
 | **Flow Definition** | Standard 5-Tuple | Standard 5-Tuple (Identical Logic) |
@@ -22,6 +23,7 @@ Unlike standard flow exporters that only look at "headers" (Layer 3/4), this too
 ---
 
 ## 3. Technology Stack
+
 *   **Language**: Java 8 (Compatible with modern JVMs).
 *   **Build System**: Apache Maven.
 *   **Packet Capture Library**: `Pcap4J` (Wrapper for `libpcap`/`Npcap`).
@@ -33,6 +35,7 @@ Unlike standard flow exporters that only look at "headers" (Layer 3/4), this too
 ## 4. How It Works (Architecture)
 
 ### The "Flow" Concept
+
 A "Flow" is defined as a bidirectional conversation between two points. We identify it using a **5-Tuple Key**:
 1.  **Source IP**
 2.  **Destination IP**
@@ -60,16 +63,21 @@ A "Flow" is defined as a bidirectional conversation between two points. We ident
 *   **IAT (Inter-Arrival Time)**: The silent time between packets. Important for detecting "beacons" (C2 servers).
 
 ### DNS DPI Features (The "Content" of traffic)
+
 > [!TIP]
 > See [FEATURES_DOCUMENTATION.md](FEATURES_DOCUMENTATION.md) for a full definition of every feature and how it is derived.
+
 *   **Header Flags**:
     *   `DNS QR`: 0=Query, 1=Response.
     *   `DNS OpCode`: e.g., Standard Query, Update, Notify.
     *   `DNS RCode`: Response status (e.g., `NXDOMAIN` = domain not found).
+
 *   **Counters**: Count of Questions, Answers, Authorities, and Additional records.
+
 *   **Query Analysis (Abuse Detection)**:
     *   `DNS Query Len`: Length of the domain name. (Long names = Tunneling).
     *   `DNS Query Type`: A, AAAA, TXT, etc.
+
 *   **Response Analysis (Fast-Flux Detection)**:
     *   `DNS Ans TTL Mean`: Average "Time to Live". Low TTLs = Botnets.
     *   `DNS Unique Domains`: How many different sites were asked for in one flow.
@@ -117,6 +125,7 @@ java -jar net-traffic-analysis-1.0-SNAPSHOT.jar -f suspicious_traffic.pcap -o fo
 *   **Deep Dive**: See our [Wireshark Testing & Verification Guide](WIRESHARK_TESTING_GUIDE.md) for a field-by-field breakdown.
 
 ### Using for Machine Learning
+
 > [!TIP]
 > See [FEATURE_ENGINEERING_TIPS.md](FEATURE_ENGINEERING_TIPS.md) for a guide on Data Cleaning, Scaling, and Encoding before training your model.
 
