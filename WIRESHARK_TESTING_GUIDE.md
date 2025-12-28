@@ -1,68 +1,110 @@
-# Wireshark Testing & Feature Verification Guide
+# Wireshark & CSV Verification Guide (Manual Audit)
 
-This document explains every extracted DNS feature, how it is derived (Direct from packet vs. Calculated), and the exact Wireshark filter to use for verification.
+This guide serves as the **Standard Operating Procedure (SOP)** for verifying that the tool's CSV output is accurate using Wireshark.
 
-## 1. Header-Level Features (Protocol Misuse)
-
-| Feature | Type | Source Logic | Wireshark Filter / Verification |
-| :--- | :--- | :--- | :--- |
-| **`dns_qr`** | **Direct** | Reads the QR bit from the DNS header. If *any* response is seen in the flow, this is 1. | `dns.flags.response` (0=Query, 1=Response). Check if the flow contains any packet with `dns.flags.response == 1`. |
-| **`dns_opcode`** | **Direct** | Reads the OpCode field (e.g., 0=Standard, 5=Update). Returns the last observed OpCode. | `dns.flags.opcode`. |
-| **`dns_rcode`** | **Direct** | Reads the RCode field (e.g., 0=NoError, 3=NXDOMAIN). Returns the last observed RCode. | `dns.flags.rcode`. Common values: 0 (No Error), 3 (NXDOMAIN). |
-| **`dns_qdcount`** | **Direct** | Sum of "Questions" counts from all packets in flow. | `dns.count.queries`. Select packet -> DNS -> "Questions". Sum this value for all packets. |
-| **`dns_ancount`** | **Direct** | Sum of "Answer RRs" counts from all packets. | `dns.count.answers`. |
-| **`dns_nscount`** | **Direct** | Sum of "Authority RRs" counts from all packets. | `dns.count.auth_rr`. |
-| **`dns_arcount`** | **Direct** | Sum of "Additional RRs" counts from all packets. | `dns.count.add_rr`. |
+**Prerequisites**:
+1.  Open your **PCAP file** in Wireshark.
+2.  Open your **CSV file** in Excel/Sheets.
 
 ---
 
-## 2. Query-Level Features (Abuse Indicators)
+## Phase 1: Locating the Flow
 
-| Feature | Type | Source Logic | Wireshark Filter / Verification |
-| :--- | :--- | :--- | :--- |
-| **`dns_query_length`**| **Direct** | Average length of the QNAME (domain string) in questions. | `dns.qry.name.len`. Click a query -> "Length". Average this across all queries. |
-| **`dns_query_type`** | **Direct** | The numerical Type of the query (1=A, 28=AAAA, 16=TXT). Returns last observed. | `dns.qry.type`. |
+To verify a feature, you must first look at the *exact same packets* that the tool analyzed.
 
----
+### Step 1: Pick a Row
+Select a row in your CSV that looks interesting (e.g., has `Total Queries > 1` or `Amp Factor > 1`).
 
-## 3. Response-Level Features (Infrastructure)
+*Example CSV Row:*
+```csv
+Src IP,Dst IP,Src Port,Dst Port,Protocol,...
+192.168.137.199,192.168.137.1,58618,53,17,...
+```
 
-| Feature | Type | Source Logic | Wireshark Filter / Verification |
-| :--- | :--- | :--- | :--- |
-| **`dns_answer_count`**| **Direct** | Number of actual Answer records processed (loop count). | Count the number of "Answer" lines in the "Domain Name System (response)" tree in Wireshark. |
-| **`dns_answer_rrtypes`**|**Direct**| Count of *unique* record types (A, AAAA, CNAME) in answers. | `dns.resp.type`. Check how many distinct types exist in the response section. |
-| **`dns_answer_ttls_mean`**|**Derived**| Average of all TTL values found in all Answer records. | `dns.resp.ttl`. Extract all TTLs -> Sum them -> Divide by count. |
-| **`dns_answer_ttls_max`**|**Derived**| The highest TTL value found. | Sort `dns.resp.ttl` column in Wireshark descending. Top value. |
-| **`dns_answer_ttls_min`**|**Derived**| The lowest TTL value found. | Sort `dns.resp.ttl` column ascending. Bottom value. |
+### Step 2: Build the Filter
+In the top bar of Wireshark, type a filter that matches the **5-Tuple** from your CSV row.
 
----
+**Formula**:
+```text
+ip.addr == [Src IP] && ip.addr == [Dst IP] && udp.port == [Src Port] && udp.port == [Dst Port]
+```
 
-## 4. Derived & Advanced Features (Behavioral)
+**Example Filter**:
+```text
+ip.addr == 192.168.137.199 && ip.addr == 192.168.137.1 && udp.port == 58618 && udp.port == 53
+```
+*Tip: If Protocol is TCP, use `tcp.port` instead of `udp.port`.*
 
-These features are calculated by aggregating multiple packets. They are not found in a single field but describe the flow's behavior.
-
-| Feature | Type | Source Logic | Wireshark Verification Strategy |
-| :--- | :--- | :--- | :--- |
-| **`dns_total_queries`** | **Derived** | Count of packets where `QR=0`. | Filter `dns.flags.response == 0`. Count packets in the flow. |
-| **`dns_total_responses`**| **Derived** | Count of packets where `QR=1`. | Filter `dns.flags.response == 1`. Count packets in the flow. |
-| **`dns_unique_domains`** | **Derived** | Size of a Set containing all unique `QNAME` strings seen. | Filter `dns.qry.name`. Go to Statistics -> DNS -> Tree. Count distinct names. |
-| **`dns_rrtype_entropy`** | **Derived** | Shannon entropy of the distribution of Query Types. | Hard to manually calculate. Check if types are uniform (high entropy) or single-type (zero entropy). |
+**Result**: Wireshark should show only the packets for that specific conversation.
 
 ---
 
-## 5. Rate & Temporal Features (Flooding/DoS)
+## Phase 2: Verifying Columns (Step-by-Step)
 
-| Feature | Type | Source Logic | Wireshark Verification Strategy |
-| :--- | :--- | :--- | :--- |
-| **`queries_per_second`** | **Derived** | `total_queries` / `flow_duration_seconds`. | (Count of `dns.flags.response == 0`) / (Time of Last Packet - Time of First Packet). |
-| **`nxdomain_rate`** | **Derived** | `count(NXDOMAIN)` / `total_responses`. | Filter `dns.flags.rcode == 3`. Count packets. Divide by total response count. |
+Go through the columns in your CSV row and check them against the Wireshark view.
+
+### A. Basic Identification
+| CSV Column | Wireshark Check |
+| :--- | :--- |
+| **Flow Duration** | Look at the "Time" column. `Last Packet Time - First Packet Time`. |
+| **Tot Fwd/Bwd Pkts** | Count the packets taking into account direction. |
+
+### B. DNS Header Flags (Direct)
+*Look at the "Domain Name System" section in the packet details pane.*
+
+| CSV Column | Wireshark Field | How to Verify |
+| :--- | :--- | :--- |
+| **dns_qr** | `Flags` -> `Response` | **0** if it's a Query, **1** if it's a Response. |
+| **dns_opcode** | `Flags` -> `Opcode` | Check the value (e.g., "Standard query (0)"). |
+| **dns_qdcount** | `Questions` | Count the number of items in the "Questions" section. |
+| **dns_query_type** | `Queries` -> `Type` | Check if it says `A (1)`, `AAAA (28)`, `TXT (16)`, or `ANY (255)`. |
+| **dns_answer_count** | `Answer RRs` | Count of items in the "Answers" section. |
+
+### C. Volume Metrics (Direct Count)
+
+| CSV Column | Verification Method |
+| :--- | :--- |
+| **dns_total_queries** | Count how many **Blue** (Query) packets are in the filtered view. |
+| **dns_total_responses** | Count how many **Yellow** (Response) packets are in the filtered view. |
+| **queries_per_second** | `Total Queries` / `Flow Duration (Seconds)`. |
+
+### D. Advanced Math Features (Calculator Needed)
+
+These features detect Abuse and must be calculated manually.
+
+#### 1. `dns_amplification_factor`
+*   **Concept**: How much bigger is the response than the query?
+*   **Verification**:
+    1.  Click the **Query Packet**. look at `Length` column (e.g., 60).
+    2.  Click the **Response Packet**. look at `Length` column (e.g., 3000).
+    3.  **Calculate**: `3000 / 60` = **50.0**.
+    4.  **Check CSV**: Matches?
+
+#### 2. `query_response_ratio`
+*   **Concept**: Are we sending more queries than we get back?
+*   **Verification**:
+    1.  Count Queries (e.g., 5).
+    2.  Count Responses (e.g., 5).
+    3.  **Calculate**: `5 / 5` = **1.0**.
+    4.  **Check CSV**: Matches?
+
+#### 3. `packet_size_stddev`
+*   **Concept**: Are the packet sizes varying (Human) or identical (Bot)?
+*   **Verification**:
+    1.  Write down the `Length` of every packet in the flow: e.g., `[60, 60, 60, 60]`.
+    2.  **Calculate**: If they are all identical, StdDev must be **0.0**.
+    *   **Note**: The tool uses **Population StdDev** (N). Some online calculators use **Sample StdDev** (N-1). If numbers differ slightly, check your formula.
+    3.  **Check CSV**: Matches?
+
+#### 4. `dns_any_query_ratio`
+*   **Concept**: What % of requests are for `ANY` records?
+*   **Verification**:
+    1.  Count packets where `Type` is `ANY` (e.g., 90).
+    2.  Count total queries (e.g., 100).
+    3.  **Calculate**: `90 / 100` = **0.9**.
+    4.  **Check CSV**: Matches?
 
 ---
 
-## 6. Size & EDNS (Tunneling/Amplification)
-
-| Feature | Type | Source Logic | Wireshark Filter / Verification |
-| :--- | :--- | :--- | :--- |
-| **`dns_edns_present`** | **Direct** | 1 if an OPT Record (Type 41) is found in Additional Section. | Filter `dns.resp.type == 41` or look for "OPT" in Additional records. |
-| **`dns_edns_udp_size`**| **Direct** | Reads the "UDP Payload Size" field from the OPT record. | `dns.rr.udp_payload_size`. |
-| **`dns_response_size`**| **Derived**| Sum of packet lengths for all response packets. | Filter `dns.flags.response == 1`. Sum the `frame.len` or `udp.length` column. |
+## Phase 3: "Trust" Clean Check
+If you check 3-5 random flows using this method and the numbers match, the tool is mathematically verified.

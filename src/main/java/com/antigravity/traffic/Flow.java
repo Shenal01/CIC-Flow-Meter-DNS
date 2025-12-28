@@ -113,59 +113,41 @@ public class Flow {
         sb.append(flowIatStats.getStdDev()).append(",");
         sb.append(flowIatStats.getMax()).append(",");
 
-        // DNS Features
+        // DNS Features (Infrastructure Focused)
         if (dnsExtractor != null && dnsExtractor.isDnsFlow()) {
-            double durationSec = getFlowDuration() / 1000.0; // Duration is usually in ms? Assuming ms based on typical
-                                                             // System.currentTimeMillis
-            // Check FlowManager/Main timestamps. usually microseconds or nanoseconds in
-            // libpcap, but here startTime logic depends on caller.
-            // Assuming milliseconds for safety or check caller.
+            double durationSec = getFlowDuration() / 1000.0;
 
-            // 1. Header
+            // 1. Direct / Header
             sb.append(dnsExtractor.getDnsQr()).append(",");
             sb.append(dnsExtractor.getDnsOpCode()).append(",");
-            sb.append(dnsExtractor.getDnsRCode()).append(",");
             sb.append(dnsExtractor.getDnsQdCount()).append(",");
-            sb.append(dnsExtractor.getDnsAnCount()).append(",");
-            sb.append(dnsExtractor.getDnsNsCount()).append(",");
-            sb.append(dnsExtractor.getDnsArCount()).append(",");
-
-            // 2. Query
-            sb.append(dnsExtractor.getDnsQueryLengthMean()).append(",");
             sb.append(dnsExtractor.getDnsQueryType()).append(",");
-
-            // 3. Response
             sb.append(dnsExtractor.getDnsAnswerCount()).append(",");
-            sb.append(dnsExtractor.getDnsAnswerRrTypesCount()).append(",");
-            sb.append(dnsExtractor.getDnsAnswerTtlsMean()).append(",");
-            sb.append(dnsExtractor.getDnsAnswerTtlsMax()).append(",");
-            sb.append(dnsExtractor.getDnsAnswerTtlsMin()).append(",");
 
-            // 4. Flow
+            // 2. Derived Counts & Rates
             sb.append(dnsExtractor.getDnsTotalQueries()).append(",");
             sb.append(dnsExtractor.getDnsTotalResponses()).append(",");
-            sb.append(dnsExtractor.getDnsUniqueDomains()).append(",");
-            sb.append(dnsExtractor.getDnsRrTypeEntropy()).append(",");
-
-            // 5. Rate
             sb.append(dnsExtractor.getQueriesPerSecond(durationSec)).append(",");
-            sb.append(dnsExtractor.getNxDomainRate()).append(",");
 
-            // 6. EDNS / Size
+            // 3. EDNS & Size
             sb.append(dnsExtractor.getDnsEdnsPresent()).append(",");
             sb.append(dnsExtractor.getDnsEdnsUdpSize()).append(",");
-            sb.append(dnsExtractor.getDnsResponseSize());
+            sb.append(dnsExtractor.getDnsResponseSize()).append(",");
+
+            // 4. New Infrastructure Ratios
+            sb.append(dnsExtractor.getDnsAmplificationFactor()).append(",");
+            sb.append(dnsExtractor.getQueryResponseRatio()).append(",");
+            sb.append(dnsExtractor.getPacketSizeStdDev()).append(",");
+            sb.append(dnsExtractor.getDnsAnyQueryRatio()).append(",");
+            sb.append(dnsExtractor.getDnsTxtQueryRatio());
 
         } else {
-            // Fill with 0s for non-DNS or non-DNS flows.
-            // Count: 7 (Header) + 2 (Query) + 5 (Response) + 4 (Flow) + 3 (Rate) + 3 (EDNS)
-            // = 24 cols
-            sb.append("0,0,0,0,0,0,0,"); // Header
-            sb.append("0,0,"); // Query
-            sb.append("0,0,0,0,0,"); // Response
-            sb.append("0,0,0,0,"); // Flow
-            sb.append("0,0,"); // Rate
-            sb.append("0,0,0"); // EDNS
+            // Fill with 0s for non-DNS flows.
+            // Total 16 features
+            sb.append("0,0,0,0,0,"); // Direct (5)
+            sb.append("0,0,0,"); // Rate (3)
+            sb.append("0,0,0,"); // EDNS (3)
+            sb.append("0,0,0,0,0"); // New Ratios (5)
         }
 
         return sb.toString();
@@ -176,17 +158,13 @@ public class Flow {
                 "Flow Duration,Tot Fwd Pkts,Tot Bwd Pkts," +
                 "Flow Len Mean,Flow Len Std,Flow Len Max," +
                 "Flow IAT Mean,Flow IAT Std,Flow IAT Max," +
-                // 1. Header
-                "dns_qr,dns_opcode,dns_rcode,dns_qdcount,dns_ancount,dns_nscount,dns_arcount," +
-                // 2. Query
-                "dns_query_length,dns_query_type," +
-                // 3. Response
-                "dns_answer_count,dns_answer_rrtypes,dns_answer_ttls_mean,dns_answer_ttls_max,dns_answer_ttls_min," +
-                // 4. Flow
-                "dns_total_queries,dns_total_responses,dns_unique_domains,dns_rrtype_entropy," +
-                // 5. Rate
-                "queries_per_second,nxdomain_rate," +
-                // 6. EDNS
-                "dns_edns_present,dns_edns_udp_size,dns_response_size";
+                // 1. Direct
+                "dns_qr,dns_opcode,dns_qdcount,dns_query_type,dns_answer_count," +
+                // 2. Counts & Rates
+                "dns_total_queries,dns_total_responses,queries_per_second," +
+                // 3. EDNS & Size
+                "dns_edns_present,dns_edns_udp_size,dns_response_size," +
+                // 4. New Infrastructure Ratios
+                "dns_amplification_factor,query_response_ratio,packet_size_stddev,dns_any_query_ratio,dns_txt_query_ratio";
     }
 }

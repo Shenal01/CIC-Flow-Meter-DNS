@@ -4,17 +4,15 @@ import org.pcap4j.packet.DnsPacket;
 import org.pcap4j.packet.DnsQuestion;
 import org.pcap4j.packet.DnsResourceRecord;
 import org.pcap4j.packet.Packet;
-import org.pcap4j.packet.namednumber.DnsOpCode;
 import org.pcap4j.packet.namednumber.DnsRCode;
 import org.pcap4j.packet.namednumber.DnsResourceRecordType;
 
 import java.util.HashSet;
 import java.util.Set;
-import java.util.Map;
-import java.util.HashMap;
 
 /**
  * Extracts Deep Packet Inspection (DPI) features for DNS traffic.
+ * Refactored for Infrastructure Abuse & DDoS detection.
  */
 public class DnsFeatureExtractor {
 
@@ -22,45 +20,27 @@ public class DnsFeatureExtractor {
     private boolean isDns = false;
     private long dnsQrQueryCount = 0;
     private long dnsQrResponseCount = 0;
-    // Storing last observed OpCode/RCode for simple CSV representation (or could be
-    // majority)
     private int lastOpCode = -1;
-    private int lastRCode = -1;
 
-    // Aggregate counts across all packets in flow
+    // Aggregate counts across all packets in flow (Header fields)
     private long totalQdCount = 0;
-    private long totalAnCount = 0;
-    private long totalNsCount = 0;
-    private long totalArCount = 0;
+    private long totalAnCount = 0; // Cumulative Answer Count from Header
 
     // B. Query-Level
-    private long totalQueryLength = 0;
-    private long queryCount = 0;
-    // For type, we can store the most frequent or last observed
     private int lastQueryType = -1;
 
-    // C. Response-Level
-    private long totalAnswerCount = 0; // redundant with totalAnCount? Check definition.
-    // "dns_answer_count: Total number of answers returned." -> Refers to Response
-    // packets logic.
+    // C. Infrastructure Specific Counts
+    private long dnsAnyCount = 0; // Amplification
+    private long dnsTxtCount = 0; // Amplification
 
-    private Set<Integer> answerRrTypes = new HashSet<>();
-    private long sumTtl = 0;
-    private long maxTtl = Long.MIN_VALUE;
-    private long minTtl = Long.MAX_VALUE;
-    private long ttlCount = 0;
+    // D. Size & Volumetrics
+    private long totalQueryBytes = 0;
+    private long totalResponseBytes = 0;
+    private double packetSizeSqSum = 0;
 
-    // D. Flow-Level
-    private Set<String> uniqueDomains = new HashSet<>();
-    private Map<Integer, Integer> rrTypeCounts = new HashMap<>(); // For entropy
-
-    // E. Rate / Temporal
-    private long nxDomainCount = 0;
-
-    // F. Size & EDNS
+    // E. EDNS
     private boolean hasEdns = false;
     private int ednsUdpSize = 0;
-    private long totalResponseSize = 0;
 
     public void processPacket(Packet payload, int length) {
         if (payload == null)
@@ -81,72 +61,44 @@ public class DnsFeatureExtractor {
 
         isDns = true;
 
-        // A. Header Parsing
+        // 1. Header Parsing
         boolean isResponse = header.isResponse();
         if (isResponse) {
             dnsQrResponseCount++;
+            totalResponseBytes += length;
         } else {
             dnsQrQueryCount++;
+            totalQueryBytes += length;
         }
 
+        // StdDev Calculation Helper
+        packetSizeSqSum += (double) length * length;
+
         lastOpCode = (int) header.getOpCode().value();
-        lastRCode = (int) header.getrCode().value();
 
         totalQdCount += header.getQdCountAsInt();
         totalAnCount += header.getAnCountAsInt();
-        totalNsCount += header.getNsCountAsInt();
-        totalArCount += header.getArCountAsInt();
 
-        // Check for NXDOMAIN
-        if (isResponse && header.getrCode() == DnsRCode.NX_DOMAIN) {
-            nxDomainCount++;
-        }
-
-        // Response Size tracking
-        if (isResponse) {
-            totalResponseSize += length;
-        }
-
-        // Check for EDNS in Additional Records
+        // 2. EDNS Check
         for (DnsResourceRecord rr : header.getAdditionalInfo()) {
             if (rr.getDataType() == DnsResourceRecordType.OPT) {
                 hasEdns = true;
-                // OPT RR class field contains UDP payload size
                 ednsUdpSize = rr.getDataClass().value() & 0xFFFF;
             }
         }
 
-        // B. Query Parsing (Questions)
+        // 3. Query Parsing (Questions)
         for (DnsQuestion q : header.getQuestions()) {
-            String qName = q.getQName().getName();
-            uniqueDomains.add(qName);
-            totalQueryLength += qName.length(); // bytes estimate
-            lastQueryType = (int) q.getQType().value();
-            queryCount++;
+            int qType = (int) q.getQType().value();
+            lastQueryType = qType;
 
-            recordRrType((int) q.getQType().value());
-        }
-
-        // C. Response Parsing (Answers)
-        if (isResponse) {
-            for (DnsResourceRecord rr : header.getAnswers()) {
-                answerRrTypes.add((int) rr.getDataType().value());
-                long ttl = rr.getTtl() & 0xFFFFFFFFL; // unsigned int
-
-                sumTtl += ttl;
-                if (ttl > maxTtl)
-                    maxTtl = ttl;
-                if (ttl < minTtl)
-                    minTtl = ttl;
-                ttlCount++;
-
-                recordRrType((int) rr.getDataType().value());
+            // Check for Amplification Types (ANY=255, TXT=16)
+            if (qType == 255) { // ANY
+                dnsAnyCount++;
+            } else if (qType == 16) { // TXT
+                dnsTxtCount++;
             }
         }
-    }
-
-    private void recordRrType(int type) {
-        rrTypeCounts.put(type, rrTypeCounts.getOrDefault(type, 0) + 1);
     }
 
     // Getters for Features
@@ -155,12 +107,10 @@ public class DnsFeatureExtractor {
         return isDns;
     }
 
-    // Header
+    // --- Direct Features ---
+
     public int getDnsQr() {
-        // 0 if only queries, 1 if only responses, 2 if both (mixed/flow),
-        // BUT requirement says "Query/Response flag status".
-        // For a flow, it might be ambiguous. Let's return 1 if we saw ANY response
-        // (completed interaction).
+        // Return 1 if we saw any response (completed interaction), else 0
         return (dnsQrResponseCount > 0) ? 1 : 0;
     }
 
@@ -168,90 +118,18 @@ public class DnsFeatureExtractor {
         return lastOpCode == -1 ? 0 : lastOpCode;
     }
 
-    public int getDnsRCode() {
-        return lastRCode == -1 ? 0 : lastRCode;
-    }
-
     public long getDnsQdCount() {
         return totalQdCount;
-    }
-
-    public long getDnsAnCount() {
-        return totalAnCount;
-    }
-
-    public long getDnsNsCount() {
-        return totalNsCount;
-    }
-
-    public long getDnsArCount() {
-        return totalArCount;
-    }
-
-    // Query
-    public double getDnsQueryLengthMean() {
-        return queryCount == 0 ? 0 : (double) totalQueryLength / queryCount;
     }
 
     public int getDnsQueryType() {
         return lastQueryType == -1 ? 0 : lastQueryType;
     }
 
-    // Response
     public long getDnsAnswerCount() {
-        return ttlCount;
-    } // Logic: count of answers processed
-
-    public int getDnsAnswerRrTypesCount() {
-        return answerRrTypes.size();
+        return totalAnCount;
     }
 
-    public double getDnsAnswerTtlsMean() {
-        return ttlCount == 0 ? 0 : (double) sumTtl / ttlCount;
-    }
-
-    public long getDnsAnswerTtlsMax() {
-        return maxTtl == Long.MIN_VALUE ? 0 : maxTtl;
-    }
-
-    public long getDnsAnswerTtlsMin() {
-        return minTtl == Long.MAX_VALUE ? 0 : minTtl;
-    }
-
-    // Flow
-    public int getDnsUniqueDomains() {
-        return uniqueDomains.size();
-    }
-
-    public double getDnsRrTypeEntropy() {
-        if (rrTypeCounts.isEmpty())
-            return 0.0;
-        double entropy = 0.0;
-        long total = 0;
-        for (int count : rrTypeCounts.values())
-            total += count;
-
-        for (int count : rrTypeCounts.values()) {
-            double p = (double) count / total;
-            entropy -= p * Math.log(p) / Math.log(2);
-        }
-        return entropy;
-    }
-
-    // Rate
-    public double getQueriesPerSecond(double durationSec) {
-        if (durationSec <= 0)
-            return 0.0;
-        return dnsQrQueryCount / durationSec;
-    }
-
-    public double getNxDomainRate() {
-        if (dnsQrResponseCount == 0)
-            return 0.0;
-        return (double) nxDomainCount / dnsQrResponseCount;
-    }
-
-    // EDNS / Size
     public int getDnsEdnsPresent() {
         return hasEdns ? 1 : 0;
     }
@@ -260,16 +138,74 @@ public class DnsFeatureExtractor {
         return ednsUdpSize;
     }
 
-    public long getDnsResponseSize() {
-        return totalResponseSize;
-    }
+    // --- Derived Infrastructure Features ---
 
-    // Helpers
     public long getDnsTotalQueries() {
         return dnsQrQueryCount;
     }
 
     public long getDnsTotalResponses() {
         return dnsQrResponseCount;
+    }
+
+    public double getQueriesPerSecond(double durationSec) {
+        if (durationSec <= 0)
+            return 0.0;
+        return dnsQrQueryCount / durationSec;
+    }
+
+    public long getDnsResponseSize() {
+        return totalResponseBytes;
+    }
+
+    /**
+     * Amplification Factor = Avg Response Size / Avg Query Size
+     * If no queries/responses, returns 0.
+     */
+    public double getDnsAmplificationFactor() {
+        if (dnsQrQueryCount == 0 || dnsQrResponseCount == 0)
+            return 0.0;
+        double avgQuery = (double) totalQueryBytes / dnsQrQueryCount;
+        double avgResp = (double) totalResponseBytes / dnsQrResponseCount;
+        if (avgQuery == 0)
+            return 0.0;
+        return avgResp / avgQuery;
+    }
+
+    /**
+     * Ratio of Queries to Responses.
+     * High ratio (> 10) indicates Query Flood / Water Torture.
+     */
+    public double getQueryResponseRatio() {
+        if (dnsQrResponseCount == 0)
+            return dnsQrQueryCount; // Infinite/High
+        return (double) dnsQrQueryCount / dnsQrResponseCount;
+    }
+
+    /**
+     * Standard Deviation of Packet Sizes in this flow.
+     */
+    public double getPacketSizeStdDev() {
+        long totalCount = dnsQrQueryCount + dnsQrResponseCount;
+        if (totalCount <= 1)
+            return 0.0;
+
+        long totalBytes = totalQueryBytes + totalResponseBytes;
+        double mean = (double) totalBytes / totalCount;
+        double variance = (packetSizeSqSum / totalCount) - (mean * mean);
+
+        return (variance > 0) ? Math.sqrt(variance) : 0.0;
+    }
+
+    public double getDnsAnyQueryRatio() {
+        if (dnsQrQueryCount == 0)
+            return 0.0;
+        return (double) dnsAnyCount / dnsQrQueryCount;
+    }
+
+    public double getDnsTxtQueryRatio() {
+        if (dnsQrQueryCount == 0)
+            return 0.0;
+        return (double) dnsTxtCount / dnsQrQueryCount;
     }
 }

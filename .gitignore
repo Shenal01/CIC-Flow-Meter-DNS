@@ -12,3 +12,5 @@ dependency-reduced-pom.xml
 *.pcap
 *.csv
 feature_extraction_log.txt
+backup/
+evidence/

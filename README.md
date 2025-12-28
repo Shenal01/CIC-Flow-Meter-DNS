@@ -59,21 +59,24 @@ A "Flow" is defined as a bidirectional conversation between two points. We ident
 *   **Length Statistics**: Mean, Max, and StdDev of packet sizes.
 *   **IAT (Inter-Arrival Time)**: The silent time between packets. Important for detecting "beacons" (C2 servers).
 
-### DNS DPI Features (The "Content" of traffic)
+### DNS Infrastructure Features (Abuse Detection)
 > [!TIP]
 > See [FEATURES_DOCUMENTATION.md](FEATURES_DOCUMENTATION.md) for a full definition of every feature and how it is derived.
-*   **Header Flags**:
-    *   `DNS QR`: 0=Query, 1=Response.
-    *   `DNS OpCode`: e.g., Standard Query, Update, Notify.
-    *   `DNS RCode`: Response status (e.g., `NXDOMAIN` = domain not found).
-*   **Counters**: Count of Questions, Answers, Authorities, and Additional records.
-*   **Query Analysis (Abuse Detection)**:
-    *   `DNS Query Len`: Length of the domain name. (Long names = Tunneling).
-    *   `DNS Query Type`: A, AAAA, TXT, etc.
-*   **Response Analysis (Fast-Flux Detection)**:
-    *   `DNS Ans TTL Mean`: Average "Time to Live". Low TTLs = Botnets.
-    *   `DNS Unique Domains`: How many different sites were asked for in one flow.
-    *   `DNS RR Entropy`: Randomness of the resources. High entropy = Encrypted payload tunneling.
+> **Understanding Attacks**: See [ATTACK_EXPLANATION.md](ATTACK_EXPLANATION.md) to learn how attackers usage DNS vs DoH.
+>
+> **Checklist**: See [REQUIRED_ATTACKS_LIST.md](REQUIRED_ATTACKS_LIST.md) for the 5 infrastructure attacks you must include in your dataset.
+>
+> **How It Works**: See [FEATURE_EXTRACTION_EXPLAINED.md](FEATURE_EXTRACTION_EXPLAINED.md) to understand the difference between Network Flows and DNS Packets.
+*   **Volume & Flag Analysis**:
+    *   `Queries/Sec`: #1 Indicator for floods.
+    *   `DNS Amp Factor`: Measures effective amplification (Bytes Out > Bytes In).
+    *   `Query/Response Ratio`: Asymmetry detection (1000 Queries vs 0 Responses).
+*   **Intent Analysis**:
+    *   `ANY/TXT Ratios`: Attackers use specific record types for payload maximization.
+    *   `EDNS Size`: Requesting 4096 bytes indicates intended amplification.
+*   **Signature Analysis**:
+    *   `Packet StdDev`: Automated tools send uniform packet sizes (StdDev=0).
+    *   `OpCode/RCode`: Detecting rare protocol exploits (Update/Notify).
 
 ---
 
@@ -115,6 +118,12 @@ java -jar net-traffic-analysis-1.0-SNAPSHOT.jar -f suspicious_traffic.pcap -o fo
 **Yes.** It uses **libpcap** (the engine behind Wireshark).
 *   To verify: Run Wireshark alongside this tool. Check if the "Question Count" in Wireshark matches the `DNS QD Count` in the CSV. They will be identical.
 *   **Deep Dive**: See our [Wireshark Testing & Verification Guide](WIRESHARK_TESTING_GUIDE.md) for a field-by-field breakdown.
+
+### Using for Machine Learning
+> [!TIP]
+> See [FEATURE_ENGINEERING_TIPS.md](FEATURE_ENGINEERING_TIPS.md) for a guide on Data Cleaning, Scaling, and Encoding before training your model.
+> **Walkthrough**: See [FEATURE_ENGINEERING_WALKTHROUGH.md](FEATURE_ENGINEERING_WALKTHROUGH.md) for a real-world example with sample data.
+> **Data Dictionary**: See [METRICS_AND_UNITS.md](METRICS_AND_UNITS.md) for a definition of every CSV column's unit and formula.
 
 ### Common Errors
 1.  **"Operation Not Permitted"**:
