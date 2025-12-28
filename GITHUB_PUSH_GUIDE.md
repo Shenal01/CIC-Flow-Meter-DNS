@@ -9,19 +9,19 @@ This project is now a fully initialized Git repository on your local machine. Fo
 ## Step 1: Create a New Repository on GitHub
 1.  Log in to [GitHub.com](https://github.com).
 2.  Click the **+** icon in the top-right corner -> **New repository**.
-3.  **Repository Name**: `antigravity-dns-analyzer` (or any name you prefer).
+3.  **Repository Name**: `CIC-Flow-Meter-DNS` (or any name you prefer).
 4.  **Description**: "Enhanced CICFlowMeter with DNS DPI features".
 5.  **Public/Private**: Choose your preference.
 6.  **Important**: Do **NOT** check "Add a README", "Add .gitignore", or "Choose a license". We already have these local files.
 7.  Click **Create repository**.
 
 ## Step 2: Link Local Repo to GitHub
-Copy the "HTTPS" URL shown on the next page (e.g., `https://github.com/YourUsername/antigravity-dns-analyzer.git`).
+Copy the "HTTPS" URL shown on the next page (e.g., `https://github.com/YourUsername/CIC-Flow-Meter-DNS.git`).
 
 Run the following command in your terminal (replace the URL with yours):
 
 ```bash
-git remote add origin https://github.com/YOUR_USERNAME/antigravity-dns-analyzer.git
+git remote add origin https://github.com/YOUR_USERNAME/CIC-Flow-Meter-DNS.git
 ```
 
 ## Step 3: Push the Code
