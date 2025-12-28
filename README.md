@@ -10,6 +10,7 @@ Unlike standard flow exporters that only look at "headers" (Layer 3/4), this too
 ## 2. Comparison: Enhanced vs. Legacy CICFlowMeter
 > [!NOTE]
 > For a detailed line-by-line comparison, see our [Comprehensive Differences Guide](DIFFERENCES.md).
+> 
 | Feature | Legacy CICFlowMeter | **Enhanced Version (This Tool)** |
 | :--- | :--- | :--- |
 | **Flow Definition** | Standard 5-Tuple | Standard 5-Tuple (Identical Logic) |
