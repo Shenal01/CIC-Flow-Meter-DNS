@@ -29,6 +29,10 @@ public class BasicStats {
         return stats.getN() == 0 ? 0 : stats.getStandardDeviation();
     }
 
+    public double getVariance() {
+        return stats.getN() == 0 ? 0 : stats.getVariance();
+    }
+
     public double getSum() {
         return stats.getSum();
     }
