@@ -16,6 +16,7 @@ Unlike standard flow exporters that only look at "headers" (Layer 3/4), this too
 | **Flow Definition** | Standard 5-Tuple | Standard 5-Tuple (Identical Logic) |
 | **Statistical Features** | ~80 Features (IAT, Sizes, Idle/Active) | Replicates Core Stats + **30+ New DNS Features** |
 | **DNS Visibility** | None (treats DNS as generic UDP) | **Full DPI**: Inspects Queries, Answers, TTLs, Entropy |
+| **Output Formats** | CSV only | **CSV + Google Sheets** (with dual-export mode) |
 | **Architecture** | JNetPcap (Older, Native issues) | **Pcap4J** (Modern, Better Java integration) |
 | **Stability** | Known for crashing on malformed packets | **Robust Error Handling** & Graceful Shutdown Hooks |
 | **Java Version** | Legacy Java | Compatible with Java 8 through 17+ |
@@ -110,6 +111,71 @@ Read a saved capture file.
 ```bash
 java -jar net-traffic-analysis-1.0-SNAPSHOT.jar -f suspicious_traffic.pcap -o forensics_report.csv
 ```
+
+#### 3. **NEW: Google Sheets Integration** 📊
+Export network flow data to both CSV files and Google Sheets simultaneously for online monitoring and collaboration.
+
+##### Setup (One-Time Configuration)
+1. **Create Google Cloud Project** at [console.cloud.google.com](https://console.cloud.google.com/)
+2. **Enable Google Sheets API** in APIs & Services → Library
+3. **Create Service Account**:
+   - Go to APIs & Services → Credentials → Create Credentials → Service Account
+   - Download the JSON credentials file
+   - Note the service account email (e.g., `your-sa@project.iam.gserviceaccount.com`)
+4. **Share Your Google Sheet**:
+   - Open your target Google Sheet
+   - Click "Share" → Add the service account email as **Editor**
+   - Uncheck "Notify people" → Click "Share"
+
+> [!NOTE]
+> For detailed setup instructions, see [GOOGLE_SHEETS_SETUP.md](documentation/GOOGLE_SHEETS_SETUP.md)
+
+##### Usage Examples
+
+**Create CSV and Append to Existing Google Sheet:**
+```bash
+java -jar net-traffic-analysis-1.0-SNAPSHOT.jar \
+  -f attack.pcap \
+  -o attack.csv \
+  -a \
+  --google /path/to/credentials.json \
+  --sheet-id 1AbC123XyZ_YourSheetId
+```
+
+**Create CSV and New Google Sheet:**
+```bash
+java -jar net-traffic-analysis-1.0-SNAPSHOT.jar \
+  -f normal.pcap \
+  -o normal.csv \
+  -b \
+  --google /path/to/credentials.json
+```
+*Omitting `--sheet-id` creates a new spreadsheet with a timestamp name.*
+
+**Live Capture to Google Sheets:**
+```bash
+sudo java -jar net-traffic-analysis-1.0-SNAPSHOT.jar \
+  -i eth0 \
+  -o live.csv \
+  -b \
+  --google /path/to/credentials.json \
+  --sheet-id 1AbC123XyZ_YourSheetId
+```
+
+##### Features
+- ✅ **Dual Output**: Creates both local CSV and online Google Sheet
+- ✅ **Batch Writing**: Efficient API usage (writes every 100 rows)
+- ✅ **Auto-Append**: Appends to existing sheets without overwriting
+- ✅ **Auto-Create**: Creates new sheets with timestamp names
+- ✅ **Graceful Fallback**: CSV continues even if Google Sheets fails
+- ✅ **Helpful Errors**: Clear permission error messages with solutions
+
+##### CLI Options
+```
+-g, --google <path>     Google Sheets credentials JSON file path
+-s, --sheet-id <id>     Google Sheet ID to append data (optional)
+```
+
 
 ---
 

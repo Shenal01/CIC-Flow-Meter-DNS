@@ -15,7 +15,7 @@ import numpy as np
 import pickle
 import xgboost as xgb
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score, recall_score
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -28,7 +28,7 @@ MODEL_FILE = 'xgboost_dns_abuse_infrastructure_model.pkl'  # or .json
 MODEL_FORMAT = 'pkl'  # Options: 'pkl' or 'json'
 
 # Test data file (can be a subset of your original dataset or new data)
-TEST_DATA_PATH = r'C:\Users\shenal\Downloads\reseraach\Attacks\Attacks\benign_generated_mix.csv'
+TEST_DATA_PATH = r'C:\Users\shenal\Downloads\reseraach\Attacks\Attacks\generated_benign_shenal.csv'
 
 # Number of samples to test (set to None to test all)
 NUM_SAMPLES = 1000  # Test on 1000 random samples
@@ -211,10 +211,20 @@ if has_labels:
                                 target_names=['BENIGN', 'ATTACK'],
                                 digits=4))
     
+    # Recall scores
+    recall_benign = recall_score(y_test, y_pred, pos_label=0)
+    recall_attack = recall_score(y_test, y_pred, pos_label=1)
+    recall_macro = recall_score(y_test, y_pred, average='macro')
+    
+    print(f"\nRecall Scores:")
+    print(f"  BENIGN: {recall_benign:.4f} ({recall_benign*100:.2f}%)")
+    print(f"  ATTACK: {recall_attack:.4f} ({recall_attack*100:.2f}%)")
+    print(f"  Macro Average: {recall_macro:.4f} ({recall_macro*100:.2f}%)")
+    
     # Additional metrics
     from sklearn.metrics import roc_auc_score
     roc_auc = roc_auc_score(y_test, y_pred_proba[:, 1])
-    print(f"ROC-AUC Score: {roc_auc:.4f}")
+    print(f"\nROC-AUC Score: {roc_auc:.4f}")
     
 else:
     print("\n" + "=" * 80)
@@ -274,6 +284,9 @@ print(f"  - Predictions: {benign_count:,} BENIGN, {attack_count:,} ATTACK")
 
 if has_labels:
     print(f"  - Accuracy: {accuracy*100:.2f}%")
+    print(f"  - Recall (BENIGN): {recall_benign*100:.2f}%")
+    print(f"  - Recall (ATTACK): {recall_attack*100:.2f}%")
+    print(f"  - Recall (Macro Avg): {recall_macro*100:.2f}%")
     print(f"  - ROC-AUC: {roc_auc:.4f}")
 
 print("\n" + "=" * 80)

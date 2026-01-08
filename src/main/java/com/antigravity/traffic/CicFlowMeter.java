@@ -20,6 +20,9 @@ public class CicFlowMeter {
         options.addOption("l", "list", false, "List available interfaces");
         options.addOption("a", "attack", false, "Label flows as ATTACK (for training data)");
         options.addOption("b", "benign", false, "Label flows as BENIGN (default)");
+        options.addOption("g", "google", true, "Enable Google Sheets output (provide credentials file path)");
+        options.addOption("s", "sheet-id", true,
+                "Google Sheet ID to append data (optional, creates new if not provided)");
         options.addOption("h", "help", false, "Show this help message");
 
         CommandLineParser parser = new DefaultParser();
@@ -41,7 +44,12 @@ public class CicFlowMeter {
                                 "  Capture benign traffic:\n" +
                                 "    java -jar net-traffic-analysis.jar -f normal.pcap -o benign.csv -b\n\n" +
                                 "  Live capture from interface:\n" +
-                                "    java -jar net-traffic-analysis.jar -i eth0 -o live.csv -b\n");
+                                "    java -jar net-traffic-analysis.jar -i eth0 -o live.csv -b\n\n" +
+                                "  Create CSV and new Google Sheet:\n" +
+                                "    java -jar net-traffic-analysis.jar -f attack.pcap -o attack.csv -a --google creds.json\n\n"
+                                +
+                                "  Append to existing Google Sheet:\n" +
+                                "    java -jar net-traffic-analysis.jar -f normal.pcap -o normal.csv -b --google creds.json --sheet-id 1AbC123XyZ\n");
                 return;
             }
 
@@ -64,6 +72,9 @@ public class CicFlowMeter {
             String pcapFile = cmd.getOptionValue("f");
             String ifaceName = cmd.getOptionValue("i");
             String outputFile = cmd.getOptionValue("o", "flow_output.csv");
+            String googleCredsPath = cmd.getOptionValue("g");
+            String sheetId = cmd.getOptionValue("s");
+            boolean enableGoogleSheets = (googleCredsPath != null);
 
             // Determine label: ATTACK, BENIGN, or null (no label)
             String label = null; // No label by default
@@ -83,7 +94,29 @@ public class CicFlowMeter {
             }
 
             try (PrintWriter writer = new PrintWriter(new FileWriter(outputFile))) {
-                FlowManager flowManager = new FlowManager(writer, label);
+                // Initialize Google Sheets writer if enabled
+                GoogleSheetsWriter sheetsWriter = null;
+                if (enableGoogleSheets) {
+                    try {
+                        if (sheetId != null) {
+                            // Append to existing sheet
+                            System.out.println("Google Sheets output enabled. Appending to sheet ID: " + sheetId);
+                            sheetsWriter = new GoogleSheetsWriter(googleCredsPath, sheetId, label != null);
+                        } else {
+                            // Create new sheet
+                            String sheetName = "DNS_Traffic_"
+                                    + LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+                            System.out.println("Google Sheets output enabled. Creating new sheet: " + sheetName);
+                            sheetsWriter = new GoogleSheetsWriter(googleCredsPath, sheetName, label != null);
+                        }
+                    } catch (Exception e) {
+                        System.err.println("\nFailed to initialize Google Sheets: " + e.getMessage());
+                        System.err.println("Continuing with CSV-only output...\n");
+                        sheetsWriter = null; // Disable Google Sheets on error
+                    }
+                }
+
+                FlowManager flowManager = new FlowManager(writer, label, sheetsWriter);
                 PcapHandle handle;
                 boolean isLiveCapture = (pcapFile == null); // Track mode
 
@@ -190,6 +223,12 @@ public class CicFlowMeter {
                 long seconds = duration.toSecondsPart();
 
                 System.out.println("Done. Output written to " + outputFile);
+
+                // Print Google Sheets URL if enabled
+                if (enableGoogleSheets && sheetsWriter != null) {
+                    System.out.println("\nGoogle Sheet URL: " + sheetsWriter.getSpreadsheetUrl());
+                }
+
                 System.out.println("\nStart time: " + startTime.format(formatter));
                 System.out.println("End time: " + endTime.format(formatter));
                 System.out.printf("Duration: %02d:%02d:%02d%n", hours, minutes, seconds);

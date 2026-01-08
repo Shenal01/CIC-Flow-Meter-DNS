@@ -21,6 +21,7 @@ public class FlowManager {
 
     private final Map<FlowKey, Flow> activeFlows = new HashMap<>();
     private final PrintWriter csvWriter;
+    private final GoogleSheetsWriter sheetsWriter; // Optional, can be null
     private final long flowTimeoutMillis = 120000; // 2 minutes timeout
     private long packetCounter = 0;
     private boolean isDumped = false; // Flag to ensure idempotent dump
@@ -29,12 +30,20 @@ public class FlowManager {
     // FIX #5: Add time-based timeout checking
     private long lastTimeoutCheck = 0;
 
-    public FlowManager(PrintWriter csvWriter, String label) {
+    public FlowManager(PrintWriter csvWriter, String label, GoogleSheetsWriter sheetsWriter) {
         this.csvWriter = csvWriter;
         this.label = label;
-        // Write Header
-        csvWriter.println(Flow.getCsvHeader(label != null));
+        this.sheetsWriter = sheetsWriter;
+
+        // Write Header to CSV
+        String header = Flow.getCsvHeader(label != null);
+        csvWriter.println(header);
         csvWriter.flush();
+
+        // Write Header to Google Sheets if enabled
+        if (sheetsWriter != null) {
+            sheetsWriter.writeHeader(header);
+        }
     }
 
     public synchronized void processPacket(Packet packet, Timestamp timestamp) {
@@ -184,10 +193,26 @@ public class FlowManager {
         }
 
         csvWriter.flush();
+
+        // Flush Google Sheets if enabled
+        if (sheetsWriter != null) {
+            try {
+                sheetsWriter.flush();
+            } catch (Exception e) {
+                logger.error("Failed to flush Google Sheets data", e);
+            }
+        }
+
         isDumped = true;
     }
 
     private void exportFlow(Flow flow) {
-        csvWriter.println(flow.toCsvRow());
+        String csvRow = flow.toCsvRow();
+        csvWriter.println(csvRow);
+
+        // Also write to Google Sheets if enabled
+        if (sheetsWriter != null) {
+            sheetsWriter.writeRow(csvRow);
+        }
     }
 }
