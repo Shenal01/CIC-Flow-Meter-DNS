@@ -8,7 +8,7 @@ from sklearn.metrics import classification_report, roc_auc_score, confusion_matr
 # =====================================================================
 # CONFIGURATION
 # =====================================================================
-MODEL_PATH = r"C:\Users\shenal\Downloads\reseraach\CIC-Flow-Meter-DNS\xgb_model_v2.3.pkl"
+MODEL_PATH = r"C:\Users\shenal\Downloads\reseraach\CIC-Flow-Meter-DNS\xgb_model_v2.4.pkl"
 
 # These columns will ALWAYS be dropped before prediction
 COLS_TO_DROP = ['src_ip', 'dst_ip', 'src_port', 'dst_port', 'protocol_number']
