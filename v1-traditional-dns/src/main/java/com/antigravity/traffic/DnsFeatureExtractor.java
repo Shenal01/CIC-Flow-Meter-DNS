@@ -4,6 +4,7 @@ import org.pcap4j.packet.DnsPacket;
 import org.pcap4j.packet.DnsQuestion;
 import org.pcap4j.packet.DnsResourceRecord;
 import org.pcap4j.packet.Packet;
+import org.pcap4j.packet.namednumber.DnsRCode;
 import org.pcap4j.packet.namednumber.DnsResourceRecordType;
 
 import java.util.HashSet;
@@ -54,7 +55,7 @@ public class DnsFeatureExtractor {
     private double responseTimeSum = 0.0;
     private long responseTimeCount = 0L;
 
-    // REMOVED: ttlViolationCount (Not DNS specific)
+    private long ttlViolationCount = 0L;
 
     public void processPacket(Packet payload, int length, long timestamp) {
         if (payload == null)
@@ -172,8 +173,13 @@ public class DnsFeatureExtractor {
         return variance > 0 ? variance : 0.0;
     }
 
-    // REMOVED: addTtlViolation()
-    // REMOVED: getTtlViolationCount()
+    public void addTtlViolation() {
+        ttlViolationCount++;
+    }
+
+    public long getTtlViolationCount() {
+        return ttlViolationCount;
+    }
 
     // Getters for Features
 
@@ -228,7 +234,19 @@ public class DnsFeatureExtractor {
         return totalQueryBytes;
     }
 
-    // REMOVED: getMeanAnswersPerQuery()
+    /**
+     * Mean number of answers per DNS response packet.
+     * High values (>3) may indicate amplification attacks or DNSSEC responses.
+     * For infrastructure attack detection, this helps identify:
+     * - Normal queries: 1-2 answers typical
+     * - Amplification attacks: 3+ answers (especially ANY queries, DNSSEC)
+     */
+    public double getMeanAnswersPerQuery() {
+        if (dnsResponsePacketCount == 0) {
+            return 0.0;
+        }
+        return (double) totalAnswerCount / dnsResponsePacketCount;
+    }
 
     public double getQueriesPerSecond(double durationSec) {
         if (durationSec <= 0)

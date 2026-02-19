@@ -10,7 +10,36 @@ dependency-reduced-pom.xml
 
 # Project Specific Output
 *.pcap
+*.pcapng
 *.csv
 feature_extraction_log.txt
 backup/
 evidence/
+validation_output/
+test_pcaps/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/
+.ipynb_checkpoints/
+
+# ML Models (large binary — do not commit)
+*.pkl
+*.model
+*.joblib
+*.h5
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temp / test files
+*.log
+*.tmp
+test_write.txt
+trust_list_content.txt
